@@ -1,0 +1,53 @@
+.crawl-container {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Khoảng cách giữa các thành phần */
+  background-color: #ffffff;
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#crawlButton {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+#crawlButton:hover {
+  background-color: #45a049;
+}
+
+#pageInput {
+  padding: 5px;
+  width: 60px;
+  font-size: 16px;
+}
+
+#saveButton {
+  padding: 5px 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+#saveButton:hover {
+  background-color: #45a049;
+}
+
+#pageLabel {
+  padding: 5px 10px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 4px;
+  font-size: 16px;
+}
