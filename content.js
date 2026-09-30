@@ -162,12 +162,30 @@ function initializeCrawler() {
   updatePageCountDisplay();
 
   crawlButton.addEventListener('click', async () => {
-    console.log('Nút crawl được nhấn, đang lấy số trang...');
+    console.log('Nút crawl được nhấn, đang kiểm tra dữ liệu tìm kiếm...');
 
-    // Kiểm tra xem người dùng có đang ở trang danh sách kết quả tìm kiếm không
+    // Tìm 2 ô tìm kiếm theo ảnh (Find your perfect job & City, state...)
+    const keywordInput = document.querySelector('input[placeholder*="Find your perfect job" i], input[id*="jobTitle" i], input[data-test="search-bar-keyword-input"]');
+    const locationInput = document.querySelector('input[placeholder*="City, state" i], input[id*="location" i], input[data-test="search-bar-location-input"]');
+
+    const keywordVal = keywordInput?.value?.trim() || '';
+    const locationVal = locationInput?.value?.trim() || '';
     const initialJobs = document.querySelectorAll('li[data-test="jobListing"], div[class*="jobCardContainer"], [class*="JobCard"]');
-    if (window.location.pathname.toLowerCase().endsWith('/index.htm') || initialJobs.length === 0) {
-      alert('Bạn đang ở trang chủ tìm kiếm. Vui lòng nhập từ khóa công việc (ví dụ: developer) vào ô tìm kiếm rồi bấm Crawl lại!');
+
+    // 1. Trường hợp chưa nhập thông tin tìm kiếm
+    if (!keywordVal && !locationVal && initialJobs.length === 0) {
+      if (keywordInput) {
+        keywordInput.focus();
+        keywordInput.style.outline = '2px solid #ff4d4f';
+        setTimeout(() => { keywordInput.style.outline = ''; }, 3000);
+      }
+      alert('Vui lòng nhập tên công việc ("Find your perfect job") hoặc địa điểm tìm kiếm trước khi Crawl!');
+      return;
+    }
+
+    // 2. Trường hợp đã nhập nhưng chưa nhấn tìm kiếm (vẫn ở trang chủ chưa có kết quả)
+    if (initialJobs.length === 0 || window.location.pathname.toLowerCase().endsWith('/index.htm')) {
+      alert('Vui lòng nhấn Enter hoặc nút Tìm kiếm (Search) trên thanh tìm kiếm để tải danh sách việc làm trước khi Crawl!');
       return;
     }
 
