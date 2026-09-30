@@ -1,16 +1,18 @@
 .crawl-container {
   position: fixed;
-  bottom: 15px;
-  right: 15px;
-  z-index: 2147483647; /* Đảm bảo luôn nổi trên mọi thành phần của web */
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background-color: #ffffff;
-  padding: 10px 14px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  border: 1px solid #e0e0e0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
 }
 
 /* Chỉ ẩn popup đăng nhập khi extension ĐANG CHẠY CRAWL */
@@ -29,41 +31,102 @@ body.is-crawling {
 }
 
 #crawlButton {
-  padding: 10px 20px;
-  background-color: #4CAF50;
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: #0caa41; /* Màu xanh thương hiệu Glassdoor */
+  color: #ffffff;
   border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+#crawlButton:hover:not(:disabled) {
+  background-color: #0a8f37;
+  transform: translateY(-1px);
+}
+
+#crawlButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+#crawlButton:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid #cbd5e1;
+}
+
+.mode-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-}
-#crawlButton:hover {
-  background-color: #45a049;
+  transition: all 0.2s;
 }
 
-#pageInput {
-  padding: 5px;
-  width: 60px;
-  font-size: 16px;
+.mode-btn.active {
+  background-color: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-#saveButton {
-  padding: 5px 10px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
-}
-#saveButton:hover {
-  background-color: #45a049;
+.page-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-weight: 500;
 }
 
-#pageLabel {
-  padding: 5px 10px;
-  background-color: #4CAF50;
-  color: white;
-  border-radius: 4px;
-  font-size: 16px;
+#countInput {
+  padding: 6px 8px;
+  width: 58px;
+  font-size: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#countInput:focus {
+  border-color: #0caa41;
+}
+
+#statusLabel {
+  padding: 6px 10px;
+  background-color: #f1f5f9;
+  color: #475569;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+#statusLabel.running {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+#statusLabel.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
 }

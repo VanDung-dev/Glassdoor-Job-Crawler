@@ -54,14 +54,18 @@ function stopCrawlingSession() {
   }, 3000);
 }
 
-async function scrollAndLoadMore(pages, timeout = 180000) {
+async function scrollAndLoadMore(pages, targetLimit = null, timeout = 180000) {
   console.log(`Bắt đầu crawl ${pages} trang...`);
   const start = Date.now();
   let currentPage = 0;
-  let remainingPages = pages;
 
-  const pageLabel = document.getElementById('pageLabel');
-  if (pageLabel) pageLabel.textContent = `Còn: ${remainingPages} trang`;
+  const statusLabel = document.getElementById('statusLabel');
+  if (statusLabel) {
+    statusLabel.className = 'running';
+    statusLabel.textContent = targetLimit 
+      ? `⏳ Đang tải trang 1/${pages}...`
+      : `⏳ Đang tải trang 1/${pages}...`;
+  }
 
   while (currentPage < pages && Date.now() - start < timeout) {
     dismissAuthModals();
@@ -81,9 +85,10 @@ async function scrollAndLoadMore(pages, timeout = 180000) {
       break;
     }
     currentPage++;
-    remainingPages--;
-    if (pageLabel) pageLabel.textContent = `Còn: ${remainingPages} trang`;
-    if (currentPage === pages - 1) console.log('Đã crawl đủ số trang yêu cầu');
+    if (statusLabel && currentPage < pages) {
+      statusLabel.textContent = `⏳ Đang tải trang ${currentPage + 1}/${pages}...`;
+    }
+    if (currentPage === pages) console.log('Đã crawl đủ số trang yêu cầu');
   }
 
   dismissAuthModals();
@@ -95,23 +100,49 @@ async function scrollAndLoadMore(pages, timeout = 180000) {
   return jobCards;
 }
 
-function updatePageCountDisplay() {
-  console.log('Cập nhật hiển thị số trang...');
-  chrome.storage.local.get(['pageCount'], (result) => {
-    const pageCount = parseInt(result.pageCount, 10) || 1;
-    console.log(`Số trang lấy được từ storage: ${pageCount}`);
-    const pageLabel = document.getElementById('pageLabel');
-    if (pageLabel) pageLabel.textContent = `Còn: ${pageCount} trang`;
-  });
+let currentCrawlMode = 'pages';
+
+function updateModeUI(mode, countVal) {
+  currentCrawlMode = mode;
+  const modeBtns = document.querySelectorAll('.mode-btn');
+  modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+
+  const inputLabel = document.getElementById('inputLabel');
+  const countInput = document.getElementById('countInput');
+  const statusLabel = document.getElementById('statusLabel');
+
+  if (mode === 'pages') {
+    if (inputLabel) inputLabel.textContent = 'Số trang:';
+    if (countInput) {
+      countInput.value = countVal || 1;
+      countInput.min = '1';
+      countInput.max = '50';
+      countInput.step = '1';
+    }
+    if (statusLabel && !isCrawling) {
+      statusLabel.className = '';
+      statusLabel.textContent = 'trang';
+    }
+  } else {
+    if (inputLabel) inputLabel.textContent = 'Số jobs:';
+    if (countInput) {
+      countInput.value = countVal || 30;
+      countInput.min = '1';
+      countInput.max = '1000';
+      countInput.step = '10';
+    }
+    if (statusLabel && !isCrawling) {
+      statusLabel.className = '';
+      statusLabel.textContent = 'jobs';
+    }
+  }
 }
 
-function savePageCount() {
-  const pageInput = document.getElementById('pageInput');
-  const pageCount = parseInt(pageInput.value, 10) || 1;
-  console.log(`Đã nhập số trang: ${pageCount}`);
-  chrome.storage.local.set({ pageCount: pageCount }, () => {
-    console.log(`Đã lưu số trang ${pageCount} vào storage`);
-    updatePageCountDisplay();
+function updatePageCountDisplay() {
+  chrome.storage.local.get(['crawlMode', 'pageCount', 'jobCount'], (result) => {
+    const mode = result.crawlMode || 'pages';
+    const val = mode === 'pages' ? (parseInt(result.pageCount, 10) || 1) : (parseInt(result.jobCount, 10) || 30);
+    updateModeUI(mode, val);
   });
 }
 
@@ -121,42 +152,75 @@ function initializeCrawler() {
   crawlContainer.className = 'crawl-container';
 
   const crawlButton = document.createElement('button');
-  crawlButton.textContent = 'Crawl Jobs to CSV';
   crawlButton.id = 'crawlButton';
-  crawlButton.setAttribute('aria-label', 'Crawl danh sách việc làm');
+  crawlButton.innerHTML = '⬇ Crawl Jobs (CSV)';
+  crawlButton.setAttribute('aria-label', 'Crawl danh sách việc làm ra file CSV');
 
-  const pageInput = document.createElement('input');
-  pageInput.id = 'pageInput';
-  pageInput.type = 'number';
-  pageInput.min = '1';
-  pageInput.value = '1';
-  pageInput.style.width = '60px';
-  pageInput.style.margin = '0 10px';
-  pageInput.style.padding = '5px';
-  pageInput.style.fontSize = '16px';
+  // Cần gạt chuyển đổi chế độ Trang / Jobs
+  const modeToggle = document.createElement('div');
+  modeToggle.className = 'mode-toggle';
 
-  const saveButton = document.createElement('button');
-  saveButton.textContent = 'Lưu';
-  saveButton.setAttribute('aria-label', 'Lưu số trang');
-  saveButton.style.padding = '5px 10px';
-  saveButton.style.backgroundColor = '#4CAF50';
-  saveButton.style.color = 'white';
-  saveButton.style.border = 'none';
-  saveButton.style.borderRadius = '4px';
-  saveButton.style.cursor = 'pointer';
-  saveButton.style.fontSize = '16px';
-  saveButton.addEventListener('click', savePageCount);
+  const pagesBtn = document.createElement('button');
+  pagesBtn.type = 'button';
+  pagesBtn.className = 'mode-btn active';
+  pagesBtn.dataset.mode = 'pages';
+  pagesBtn.textContent = 'Trang';
 
-  const pageLabel = document.createElement('span');
-  pageLabel.id = 'pageLabel';
-  pageLabel.style.marginLeft = '10px';
-  pageLabel.style.color = 'white';
-  pageLabel.style.fontSize = '16px';
+  const jobsBtn = document.createElement('button');
+  jobsBtn.type = 'button';
+  jobsBtn.className = 'mode-btn';
+  jobsBtn.dataset.mode = 'jobs';
+  jobsBtn.textContent = 'Jobs';
+
+  modeToggle.appendChild(pagesBtn);
+  modeToggle.appendChild(jobsBtn);
+
+  const switchMode = (mode) => {
+    chrome.storage.local.set({ crawlMode: mode }, () => {
+      chrome.storage.local.get(['pageCount', 'jobCount'], (res) => {
+        const val = mode === 'pages' ? (parseInt(res.pageCount, 10) || 1) : (parseInt(res.jobCount, 10) || 30);
+        updateModeUI(mode, val);
+      });
+    });
+  };
+
+  pagesBtn.addEventListener('click', () => switchMode('pages'));
+  jobsBtn.addEventListener('click', () => switchMode('jobs'));
+
+  const inputGroup = document.createElement('div');
+  inputGroup.className = 'page-input-group';
+
+  const inputLabel = document.createElement('label');
+  inputLabel.id = 'inputLabel';
+  inputLabel.textContent = 'Số trang:';
+  inputLabel.htmlFor = 'countInput';
+
+  const countInput = document.createElement('input');
+  countInput.id = 'countInput';
+  countInput.type = 'number';
+  countInput.value = '1';
+
+  countInput.addEventListener('input', () => {
+    let val = parseInt(countInput.value, 10);
+    if (isNaN(val) || val < 1) val = 1;
+    if (currentCrawlMode === 'pages') {
+      chrome.storage.local.set({ pageCount: val });
+    } else {
+      chrome.storage.local.set({ jobCount: val });
+    }
+  });
+
+  inputGroup.appendChild(inputLabel);
+  inputGroup.appendChild(countInput);
+
+  const statusLabel = document.createElement('span');
+  statusLabel.id = 'statusLabel';
+  statusLabel.textContent = 'trang';
 
   crawlContainer.appendChild(crawlButton);
-  crawlContainer.appendChild(pageInput);
-  crawlContainer.appendChild(saveButton);
-  crawlContainer.appendChild(pageLabel);
+  crawlContainer.appendChild(modeToggle);
+  crawlContainer.appendChild(inputGroup);
+  crawlContainer.appendChild(statusLabel);
   document.body.appendChild(crawlContainer);
 
   updatePageCountDisplay();
@@ -189,18 +253,28 @@ function initializeCrawler() {
       return;
     }
 
-    chrome.storage.local.get(['pageCount'], async (result) => {
-      const pageCount = parseInt(result.pageCount, 10) || 1;
-      console.log(`Đang crawl ${pageCount} trang...`);
+    chrome.storage.local.get(['crawlMode', 'pageCount', 'jobCount'], async (result) => {
+      const mode = result.crawlMode || currentCrawlMode || 'pages';
+      let targetPages = 1;
+      let targetJobs = null;
+
+      if (mode === 'pages') {
+        targetPages = parseInt(result.pageCount, 10) || 1;
+        console.log(`Đang crawl theo chế độ TRANG: ${targetPages} trang...`);
+      } else {
+        targetJobs = parseInt(result.jobCount, 10) || 30;
+        targetPages = Math.ceil(targetJobs / 30);
+        console.log(`Đang crawl theo chế độ JOBS: ${targetJobs} jobs (cần cuộn ${targetPages} trang)...`);
+      }
 
       startCrawlingSession();
       crawlButton.disabled = true;
       crawlButton.textContent = 'Đang crawl...';
 
       try {
-        const jobElements = await scrollAndLoadMore(pageCount);
-        console.log('Bắt đầu crawl...');
-        const jobs = [['Company Name', 'Job Title', 'Link', 'Salary', 'Location', 'Date Posted', 'Easy Apply']]; // Thêm header cho CSV
+        const jobElements = await scrollAndLoadMore(targetPages, targetJobs);
+        console.log('Bắt đầu trích xuất việc làm...');
+        let jobs = [['Company Name', 'Job Title', 'Link', 'Salary', 'Location', 'Date Posted', 'Easy Apply']]; // Thêm header cho CSV
         const seenJobIds = new Set();
 
         if (!jobElements.length) {
@@ -268,6 +342,11 @@ function initializeCrawler() {
           }
         });
 
+        // Nếu ở chế độ số jobs: cắt chính xác số lượng yêu cầu
+        if (mode === 'jobs' && targetJobs && jobs.length - 1 > targetJobs) {
+          jobs = [jobs[0], ...jobs.slice(1, targetJobs + 1)];
+        }
+
         try {
           if (jobs.length === 1) {
             console.error('Không tìm thấy việc làm hợp lệ để lưu vào CSV');
@@ -277,12 +356,12 @@ function initializeCrawler() {
           // Lấy số job hợp lệ (trừ header)
           const validJobCount = jobs.length - 1;
           // Lấy title của trang web, loại bỏ tất cả số và dấu gạch dưới ở đầu
-          let fileTitle = document.title.replace(/^\d+(?:_\d+)*_/, ''); // Loại bỏ số và dấu gạch dưới ở đầu
-          fileTitle = fileTitle.replace(/[\/\\:\*\?"<>\|]/g, '_'); // Loại bỏ ký tự không hợp lệ
-          fileTitle = encodeURIComponent(fileTitle).replace(/%[0-9A-F]{2}/gi, '_'); // Mã hóa và thay ký tự đặc biệt
+          let fileTitle = document.title.replace(/^\d+(?:_\d+)*_/, '');
+          fileTitle = fileTitle.replace(/[\/\\:\*\?"<>\|]/g, '_');
+          fileTitle = encodeURIComponent(fileTitle).replace(/%[0-9A-F]{2}/gi, '_');
           const csvContent = jobs.map(row => row.map(cell => {
             if (typeof cell === 'string' && (cell.startsWith('https://') || cell.startsWith('http://'))) {
-              return cell; // Định dạng hyperlink cho Excel
+              return cell;
             }
             return `"${cell.replace(/"/g, '""')}"`;
           }).join(',')).join('\n');
@@ -294,10 +373,15 @@ function initializeCrawler() {
           downloadAnchor.click();
           downloadAnchor.remove();
           console.log(`Đã crawl ${validJobCount} việc làm và lưu vào CSV!`);
-          crawlButton.textContent = `✓ Đã crawl ${validJobCount} jobs!`;
-          setTimeout(() => {
-            if (!isCrawling) crawlButton.textContent = 'Crawl Jobs to CSV';
-          }, 4000);
+          crawlButton.innerHTML = '⬇ Crawl tiếp';
+          const statusLabel = document.getElementById('statusLabel');
+          if (statusLabel) {
+            statusLabel.className = 'success';
+            statusLabel.textContent = `✓ Đã lưu ${validJobCount} jobs!`;
+            setTimeout(() => {
+              updatePageCountDisplay();
+            }, 5000);
+          }
         } catch (e) {
           console.error(`Lỗi tạo CSV: ${e.message}`);
           crawlButton.textContent = 'Lỗi tạo CSV';
@@ -308,8 +392,8 @@ function initializeCrawler() {
       } finally {
         stopCrawlingSession();
         crawlButton.disabled = false;
-        if (!crawlButton.textContent.startsWith('✓') && !crawlButton.textContent.includes('thất bại')) {
-          crawlButton.textContent = 'Crawl Jobs to CSV';
+        if (!crawlButton.innerHTML.includes('Crawl tiếp') && !crawlButton.textContent.includes('thất bại')) {
+          crawlButton.innerHTML = '⬇ Crawl Jobs (CSV)';
         }
       }
     });
