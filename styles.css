@@ -1,15 +1,31 @@
 .crawl-container {
   position: fixed;
-  bottom: 10px;
-  right: 10px;
-  z-index: 9999;
+  bottom: 15px;
+  right: 15px;
+  z-index: 2147483647; /* Đảm bảo luôn nổi trên mọi thành phần của web */
   display: flex;
   align-items: center;
-  gap: 10px; /* Khoảng cách giữa các thành phần */
+  gap: 10px;
   background-color: #ffffff;
-  padding: 10px;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 10px 14px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
+}
+
+/* Chỉ ẩn popup đăng nhập khi extension ĐANG CHẠY CRAWL */
+body.is-crawling dialog,
+body.is-crawling dialog[open],
+body.is-crawling div[class*="Hardsell"],
+body.is-crawling div[id*="Hardsell"],
+body.is-crawling div[class*="backdrop"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.is-crawling {
+  overflow: auto !important;
 }
 
 #crawlButton {
