@@ -131,9 +131,10 @@ window.CrawlerUtils = (function () {
   // Trích xuất thông tin việc làm từ danh sách NodeList job card (kèm bộ lọc nâng cao)
   function extractJobs(jobElements, targetLimit = null, advFilters = {}) {
     const jobs = [
-      ['Company Name', 'Job Title', 'Link', 'Salary', 'Location', 'Date Posted', 'Easy Apply'],
+      ['Company Name', 'Job Title', 'Link', 'Salary', 'Location', 'Date Posted', 'Easy Apply', 'Remote', 'Company Rating', 'Job ID', 'Crawled At',],
     ];
     const seenJobIds = new Set();
+    const crawlTimestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     jobElements.forEach((job, index) => {
       try {
@@ -146,11 +147,11 @@ window.CrawlerUtils = (function () {
         }
 
         const jobIdMatch = link_job.match(/jobListingId=(\d+)/);
-        const jobId = jobIdMatch ? jobIdMatch[1] : null;
-        if (jobId && seenJobIds.has(jobId)) {
+        const jobId = jobIdMatch ? jobIdMatch[1] : (job.getAttribute('data-jobid') || 'N/A');
+        if (jobId && jobId !== 'N/A' && seenJobIds.has(jobId)) {
           return;
         }
-        if (jobId) seenJobIds.add(jobId);
+        if (jobId && jobId !== 'N/A') seenJobIds.add(jobId);
 
         const date_post =
           job
@@ -171,6 +172,14 @@ window.CrawlerUtils = (function () {
               'span[class*="EmployerProfile_compactEmployerName"], [data-test="emp-name"], span[class*="employerName"]'
             )
             ?.textContent.trim() || 'N/A';
+
+        // Trích xuất Rating công ty (VD: 4.2★)
+        const ratingElement =
+          job.querySelector('span[class*="rating"], [data-test="rating-value"], span[class*="ratingBox"]') ||
+          Array.from(job.querySelectorAll('span, div')).find(
+            (el) => el.children.length === 0 && /^\s*\d\.\d\s*★?\s*$/.test(el.textContent.trim())
+          );
+        const company_rating = ratingElement ? ratingElement.textContent.replace('★', '').trim() : 'N/A';
 
         const location =
           job
@@ -199,6 +208,14 @@ window.CrawlerUtils = (function () {
           ? 'Yes'
           : 'No';
 
+        // Nhận diện Remote qua Location, Job Title hoặc badge trên card
+        const isRemoteJob = Boolean(
+          /\bremote\b/i.test(location) ||
+          /\bremote\b/i.test(job_title) ||
+          job.querySelector('[data-test*="remote"], span[class*="remoteWork"]')
+        );
+        const remote = isRemoteJob ? 'Yes' : 'No';
+
         if (
           [link_job, company_name, job_title, salary, location, date_post, easy_apply].every(
             (val) => val === 'N/A'
@@ -209,6 +226,11 @@ window.CrawlerUtils = (function () {
 
         // Lọc nâng cao: chỉ lấy Easy Apply nếu được yêu cầu
         if (advFilters.advEasyApply && easy_apply !== 'Yes') {
+          return;
+        }
+
+        // Lọc nâng cao: chỉ lấy Remote nếu được yêu cầu
+        if (advFilters.advRemote && remote !== 'Yes') {
           return;
         }
 
@@ -227,7 +249,16 @@ window.CrawlerUtils = (function () {
           if (hasExcluded) return;
         }
 
-        jobs.push([company_name, job_title, link_job, salary, location, date_post, easy_apply]);
+        // Lọc nâng cao: Đánh giá tối thiểu
+        if (advFilters.advRating && company_rating !== 'N/A') {
+          const minRating = parseFloat(advFilters.advRating);
+          const currRating = parseFloat(company_rating);
+          if (!isNaN(minRating) && !isNaN(currRating) && currRating < minRating) {
+            return;
+          }
+        }
+
+        jobs.push([company_name, job_title, link_job, salary, location, date_post, easy_apply, remote, company_rating, jobId, crawlTimestamp,]);
       } catch (e) {
         console.error(`Lỗi trích xuất việc làm thứ ${index + 1}: ${e.message}`);
       }

@@ -123,33 +123,31 @@ body.is-crawling {
   align-items: center;
   gap: 5px;
   padding: 7px 12px;
-  background-color: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background-color: #d97706; /* Màu cam hổ phách */
+  color: #ffffff;
+  border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, transform 0.1s;
 }
 
 #pauseButton:disabled {
-  background-color: #f8fafc;
+  background-color: #cbd5e1;
   color: #94a3b8;
-  border-color: #e2e8f0;
   cursor: not-allowed;
   transform: none !important;
 }
 
 #pauseButton:hover:not(:disabled) {
-  background-color: #f1f5f9;
-  color: #0f172a;
+  background-color: #b45309;
+  transform: translateY(-1px);
 }
 
 #pauseButton.is-paused {
-  background-color: #0caa41;
+  background-color: #0caa41; /* Xanh Glassdoor để báo Tiếp tục */
   color: #ffffff;
-  border-color: #0caa41;
 }
 
 #pauseButton.is-paused:hover:not(:disabled) {
@@ -533,7 +531,7 @@ body.is-crawling {
 .crawl-expandable-drawer .reset-adv-btn {
   background: none !important;
   border: none !important;
-  color: #64748b !important;
+  color: #ef4444 !important;
   cursor: pointer !important;
   font-size: 12px !important;
   font-weight: 600 !important;
@@ -543,6 +541,6 @@ body.is-crawling {
 }
 
 .crawl-expandable-drawer .reset-adv-btn:hover {
-  background: #f1f5f9 !important;
-  color: #0f172a !important;
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
 }
