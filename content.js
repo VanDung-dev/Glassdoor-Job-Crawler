@@ -488,15 +488,19 @@ function initializeCrawler() {
       pauseButton.innerHTML = '⏸ Tạm dừng';
 
       try {
+        const isJobMode = mode === 'jobs';
         const jobElements = await CrawlerUtils.scrollAndLoadMore(
           targetPages,
-          targetJobs,
+          isJobMode ? targetJobs : null,
           (curr, total) => {
             if (statusLabel && !CrawlerUtils.getIsPaused()) {
               statusLabel.className = 'running';
-              statusLabel.textContent = `⏳ Đang tải trang ${curr}/${total}...`;
+              statusLabel.textContent = isJobMode
+                ? `⏳ Đã tìm ${curr}/${total} jobs...`
+                : `⏳ Đang tải trang ${curr}/${total}...`;
             }
-          }
+          },
+          result
         );
 
         console.log('Trích xuất dữ liệu việc làm...');

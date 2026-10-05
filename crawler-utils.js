@@ -79,21 +79,154 @@ window.CrawlerUtils = (function () {
     }, 3000);
   }
 
+  // Kiểm tra 1 job card xem có thỏa mãn toàn bộ bộ lọc nâng cao hay không
+  function isJobMatchingFilters(job, advFilters = {}) {
+    try {
+      const linkElement =
+        job.querySelector('a[data-test="job-link"]') ||
+        job.querySelector('a[href*="/partner/jobListing.htm"]');
+      let link_job = linkElement ? linkElement.getAttribute('href') || 'N/A' : 'N/A';
+
+      const company_name =
+        job.querySelector(
+          'span[class*="EmployerProfile_compactEmployerName"], [data-test="emp-name"], span[class*="employerName"]'
+        )?.textContent.trim() || 'N/A';
+
+      const job_title =
+        job.querySelector(
+          'a[class*="JobCard_jobTitle"], a[data-test="job-link"], [data-test="job-title"]'
+        )?.textContent.trim() || 'N/A';
+
+      const location =
+        job.querySelector(
+          'div[class*="JobCard_location"], [data-test="emp-location"], div[class*="location"]'
+        )?.textContent.trim() || 'N/A';
+
+      const salary =
+        job.querySelector(
+          'div[class*="JobCard_salaryEstimate"], [data-test="detailSalary"], div[class*="salary"]'
+        )?.textContent.trim() || 'N/A';
+
+      const date_post =
+        job.querySelector('div[class*="JobCard_listingAge"], div[class*="listingAge"]')?.textContent.trim() ||
+        Array.from(job.querySelectorAll('span, div'))
+          .find((el) => el.children.length === 0 && /^\s*(\d+[dhwm]|Just posted|Today)\s*$/i.test(el.textContent))
+          ?.textContent.trim() ||
+        'N/A';
+
+      const easy_apply = job.querySelector('div[class*="JobCard_easyApplyTag"], [data-test="easy-apply-tag"]')
+        ? 'Yes'
+        : 'No';
+
+      const isRemoteJob = Boolean(
+        /\bremote\b/i.test(location) ||
+        /\bremote\b/i.test(job_title) ||
+        job.querySelector('[data-test*="remote"], span[class*="remoteWork"]')
+      );
+      const remote = isRemoteJob ? 'Yes' : 'No';
+
+      const ratingElement =
+        job.querySelector('span[class*="rating"], [data-test="rating-value"], span[class*="ratingBox"]') ||
+        Array.from(job.querySelectorAll('span, div')).find(
+          (el) => el.children.length === 0 && /^\s*\d\.\d\s*★?\s*$/.test(el.textContent.trim())
+        );
+      const company_rating = ratingElement ? ratingElement.textContent.replace('★', '').trim() : 'N/A';
+
+      if ([link_job, company_name, job_title, salary, location, date_post, easy_apply].every((v) => v === 'N/A')) {
+        return false;
+      }
+
+      if (advFilters.advEasyApply && easy_apply !== 'Yes') return false;
+      if (advFilters.advRemote && remote !== 'Yes') return false;
+      if (advFilters.advHasSalary && salary === 'N/A') return false;
+
+      if (advFilters.advExcludeKeywords && advFilters.advExcludeKeywords.trim()) {
+        const excludeList = advFilters.advExcludeKeywords
+          .split(',')
+          .map((k) => k.trim().toLowerCase())
+          .filter(Boolean);
+        if (excludeList.some((k) => job_title.toLowerCase().includes(k))) return false;
+      }
+
+      if (advFilters.advRating && company_rating !== 'N/A') {
+        const minRating = parseFloat(advFilters.advRating);
+        const currRating = parseFloat(company_rating);
+        if (!isNaN(minRating) && !isNaN(currRating) && currRating < minRating) return false;
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Đếm số job card hiện có trên DOM thỏa mãn bộ lọc nâng cao (đã khử trùng lặp)
+  function countMatchingJobsOnPage(advFilters = {}) {
+    const jobCards = document.querySelectorAll(
+      'li[data-test="jobListing"], div[class="JobCard_jobCardContainer__arQlW"], div[class*="jobCardContainer"]'
+    );
+    const seenIds = new Set();
+    let matchingCount = 0;
+
+    jobCards.forEach((job) => {
+      const linkElement =
+        job.querySelector('a[data-test="job-link"]') ||
+        job.querySelector('a[href*="/partner/jobListing.htm"]');
+      let link_job = linkElement ? linkElement.getAttribute('href') || '' : '';
+      const jobIdMatch = link_job.match(/jobListingId=(\d+)/);
+      const jobId = jobIdMatch ? jobIdMatch[1] : (job.getAttribute('data-jobid') || null);
+      if (jobId && seenIds.has(jobId)) return;
+      if (jobId) seenIds.add(jobId);
+
+      if (isJobMatchingFilters(job, advFilters)) {
+        matchingCount++;
+      }
+    });
+
+    return matchingCount;
+  }
+
   // Cuộn trang và bấm nút tải thêm ("Show more jobs")
-  async function scrollAndLoadMore(pages, targetLimit = null, onProgress = null, timeout = 180000) {
-    console.log(`Bắt đầu tải ${pages} trang dữ liệu...`);
+  // Nếu crawl theo Jobs: tải liên tục cho đến khi gom ĐỦ số jobs thỏa mãn bộ lọc nâng cao
+  async function scrollAndLoadMore(pages, targetLimit = null, onProgress = null, advFilters = {}, timeout = 300000) {
+    const isJobMode = targetLimit && targetLimit > 0;
+    console.log(
+      isJobMode
+        ? `Bắt đầu tải để tìm đủ ${targetLimit} việc làm phù hợp bộ lọc nâng cao...`
+        : `Bắt đầu tải ${pages} trang dữ liệu...`
+    );
+
     const start = Date.now();
     let currentPage = 0;
+    const maxPagesCap = isJobMode ? Math.max(pages * 5, 50) : pages;
 
-    if (onProgress) onProgress(1, pages);
-
-    while (currentPage < pages && Date.now() - start < timeout) {
+    while (currentPage < maxPagesCap && Date.now() - start < timeout) {
       // Vòng lặp chờ khi người dùng bấm Tạm dừng
       while (isPaused) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
       dismissAuthModals();
+
+      // Kiểm tra xem đã gom đủ số job đạt chuẩn nâng cao chưa
+      if (isJobMode) {
+        const currentValidJobs = countMatchingJobsOnPage(advFilters);
+        if (onProgress) {
+          onProgress(currentValidJobs, targetLimit);
+        }
+        if (currentValidJobs >= targetLimit) {
+          console.log(`Đã gom đủ ${currentValidJobs}/${targetLimit} việc làm thỏa mãn bộ lọc! Dừng tải thêm.`);
+          break;
+        }
+      } else {
+        if (onProgress) {
+          onProgress(currentPage + 1, pages);
+        }
+        if (currentPage >= pages) {
+          break;
+        }
+      }
+
       window.scrollTo(0, document.body.scrollHeight);
       await new Promise((resolve) => setTimeout(resolve, 1500));
       dismissAuthModals();
@@ -112,10 +245,8 @@ window.CrawlerUtils = (function () {
         console.log(`Không còn nút "Show more jobs", đã tải tối đa danh sách.`);
         break;
       }
+
       currentPage++;
-      if (onProgress && currentPage < pages) {
-        onProgress(currentPage + 1, pages);
-      }
     }
 
     dismissAuthModals();
