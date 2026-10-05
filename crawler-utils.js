@@ -128,8 +128,8 @@ window.CrawlerUtils = (function () {
     return jobCards;
   }
 
-  // Trích xuất thông tin việc làm từ danh sách NodeList job card
-  function extractJobs(jobElements, targetLimit = null) {
+  // Trích xuất thông tin việc làm từ danh sách NodeList job card (kèm bộ lọc nâng cao)
+  function extractJobs(jobElements, targetLimit = null, advFilters = {}) {
     const jobs = [
       ['Company Name', 'Job Title', 'Link', 'Salary', 'Location', 'Date Posted', 'Easy Apply'],
     ];
@@ -207,6 +207,26 @@ window.CrawlerUtils = (function () {
           return;
         }
 
+        // Lọc nâng cao: chỉ lấy Easy Apply nếu được yêu cầu
+        if (advFilters.advEasyApply && easy_apply !== 'Yes') {
+          return;
+        }
+
+        // Lọc nâng cao: chỉ lấy việc có hiển thị mức lương
+        if (advFilters.advHasSalary && salary === 'N/A') {
+          return;
+        }
+
+        // Lọc nâng cao: loại trừ từ khóa trong tiêu đề
+        if (advFilters.advExcludeKeywords && advFilters.advExcludeKeywords.trim()) {
+          const excludeList = advFilters.advExcludeKeywords
+            .split(',')
+            .map((k) => k.trim().toLowerCase())
+            .filter(Boolean);
+          const hasExcluded = excludeList.some((k) => job_title.toLowerCase().includes(k));
+          if (hasExcluded) return;
+        }
+
         jobs.push([company_name, job_title, link_job, salary, location, date_post, easy_apply]);
       } catch (e) {
         console.error(`Lỗi trích xuất việc làm thứ ${index + 1}: ${e.message}`);
@@ -217,6 +237,25 @@ window.CrawlerUtils = (function () {
       return [jobs[0], ...jobs.slice(1, targetLimit + 1)];
     }
     return jobs;
+  }
+
+  // Tạo URL tìm kiếm tự động kèm toàn bộ tham số bộ lọc nâng cao
+  function buildSearchUrl(jobVal, locationVal, advFilters = {}) {
+    const url = new URL('https://www.glassdoor.com/Job/jobs.htm');
+    if (jobVal) url.searchParams.set('sc.keyword', jobVal);
+    if (locationVal) url.searchParams.set('locKeyword', locationVal);
+
+    if (advFilters.advEasyApply) url.searchParams.set('applicationType', '1');
+    if (advFilters.advRemote) url.searchParams.set('remoteWorkType', '1');
+    if (advFilters.advDatePosted) url.searchParams.set('fromAge', advFilters.advDatePosted);
+    if (advFilters.advRating) url.searchParams.set('minRating', advFilters.advRating);
+    if (advFilters.advMinSalary) {
+      const minSal = parseInt(advFilters.advMinSalary, 10);
+      if (!isNaN(minSal) && minSal > 0) {
+        url.searchParams.set('minSalary', (minSal * 1000).toString());
+      }
+    }
+    return url.toString();
   }
 
   // Tải danh sách jobs về dưới dạng file CSV
@@ -301,6 +340,7 @@ window.CrawlerUtils = (function () {
     getIsPaused,
     scrollAndLoadMore,
     extractJobs,
+    buildSearchUrl,
     downloadCsv,
     showInputTooltip,
   };

@@ -131,6 +131,7 @@ function initializeCrawler() {
   pauseButton.id = 'pauseButton';
   pauseButton.type = 'button';
   pauseButton.innerHTML = '⏸ Tạm dừng';
+  pauseButton.disabled = true;
   pauseButton.setAttribute('aria-label', 'Tạm dừng hoặc tiếp tục quá trình crawl');
 
   pauseButton.addEventListener('click', () => {
@@ -153,12 +154,198 @@ function initializeCrawler() {
     }
   });
 
-  crawlContainer.appendChild(crawlButton);
-  crawlContainer.appendChild(pauseButton);
-  crawlContainer.appendChild(modeToggle);
-  crawlContainer.appendChild(inputGroup);
-  crawlContainer.appendChild(statusLabel);
+  // Nút mũi tên gạt nằm chính giữa đỉnh thẻ mặc định (Handle Tab kiểu App)
+  const advHandle = document.createElement('div');
+  advHandle.className = 'crawl-drawer-handle';
+  advHandle.id = 'advDrawerHandle';
+  advHandle.title = 'Bấm để mở rộng / thu gọn bộ lọc nâng cao';
+  advHandle.innerHTML = `
+    <span class="handle-pill">
+      <svg class="handle-chevron-icon" width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 8L8 2L14 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+  `;
+
+  // Khung mở rộng nâng cao tích hợp bên trong thẻ chính (Drawer)
+  const advDrawer = document.createElement('div');
+  advDrawer.className = 'crawl-expandable-drawer';
+  advDrawer.innerHTML = `
+    <div class="drawer-header">
+      <h4>⚙ Bộ lọc nâng cao</h4>
+      <button type="button" class="drawer-close-btn" aria-label="Thu gọn">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">⚡ Easy Apply only:</span>
+        <label class="crw-toggle-switch">
+          <input type="checkbox" id="advEasyApply">
+          <span class="crw-toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">🏠 Remote only:</span>
+        <label class="crw-toggle-switch">
+          <input type="checkbox" id="advRemote">
+          <span class="crw-toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">💰 Chỉ việc có lương:</span>
+        <label class="crw-toggle-switch">
+          <input type="checkbox" id="advHasSalary">
+          <span class="crw-toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">📅 Ngày đăng:</span>
+        <select id="advDatePosted" class="crw-filter-select">
+          <option value="">Mọi lúc</option>
+          <option value="1">24 giờ qua</option>
+          <option value="3">3 ngày qua</option>
+          <option value="7">1 tuần qua</option>
+          <option value="14">2 tuần qua</option>
+          <option value="30">1 tháng qua</option>
+        </select>
+      </div>
+
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">⭐ Đánh giá công ty:</span>
+        <select id="advRating" class="crw-filter-select">
+          <option value="">Mọi mức</option>
+          <option value="4.0">★★★★☆ (4.0+)</option>
+          <option value="3.0">★★★☆☆ (3.0+)</option>
+          <option value="2.0">★★☆☆☆ (2.0+)</option>
+        </select>
+      </div>
+
+      <div class="crw-filter-row">
+        <span class="crw-filter-label">💵 Lương tối thiểu ($k/năm):</span>
+        <input type="number" id="advMinSalary" class="crw-filter-input" placeholder="Ví dụ: 70" min="0" step="5">
+      </div>
+
+      <div class="crw-filter-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+        <span class="crw-filter-label">🚫 Loại trừ từ khóa tiêu đề:</span>
+        <input type="text" id="advExcludeKeywords" class="crw-filter-input" style="width: 100% !important; box-sizing: border-box !important;" placeholder="Ví dụ: Senior, Lead, Manager">
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <span>Tự động lưu & áp dụng</span>
+      <button type="button" class="reset-adv-btn" id="resetAdvBtn">Đặt lại</button>
+    </div>
+  `;
+
+  // Thanh công cụ mặc định (hàng dưới)
+  const mainBar = document.createElement('div');
+  mainBar.className = 'crawl-main-bar';
+  mainBar.appendChild(crawlButton);
+  mainBar.appendChild(pauseButton);
+  mainBar.appendChild(modeToggle);
+  mainBar.appendChild(inputGroup);
+  mainBar.appendChild(statusLabel);
+
+  // Ghép cả Handle, Drawer và MainBar vào cùng 1 container duy nhất
+  crawlContainer.appendChild(advHandle);
+  crawlContainer.appendChild(advDrawer);
+  crawlContainer.appendChild(mainBar);
   document.body.appendChild(crawlContainer);
+
+  const advFields = {
+    advEasyApply: advDrawer.querySelector('#advEasyApply'),
+    advRemote: advDrawer.querySelector('#advRemote'),
+    advHasSalary: advDrawer.querySelector('#advHasSalary'),
+    advDatePosted: advDrawer.querySelector('#advDatePosted'),
+    advRating: advDrawer.querySelector('#advRating'),
+    advMinSalary: advDrawer.querySelector('#advMinSalary'),
+    advExcludeKeywords: advDrawer.querySelector('#advExcludeKeywords'),
+  };
+
+  const updateAdvBadge = (settings) => {
+    const hasActiveFilters = Boolean(
+      settings.advEasyApply ||
+      settings.advRemote ||
+      settings.advHasSalary ||
+      settings.advDatePosted ||
+      settings.advRating ||
+      (settings.advMinSalary && parseInt(settings.advMinSalary, 10) > 0) ||
+      (settings.advExcludeKeywords && settings.advExcludeKeywords.trim())
+    );
+    advHandle.classList.toggle('has-filters', hasActiveFilters);
+  };
+
+  const loadAdvSettings = () => {
+    chrome.storage.local.get([
+      'advEasyApply', 'advRemote', 'advHasSalary',
+      'advDatePosted', 'advRating', 'advMinSalary', 'advExcludeKeywords',
+      'advPanelExpanded'
+    ], (res) => {
+      advFields.advEasyApply.checked = Boolean(res.advEasyApply);
+      advFields.advRemote.checked = Boolean(res.advRemote);
+      advFields.advHasSalary.checked = Boolean(res.advHasSalary);
+      advFields.advDatePosted.value = res.advDatePosted || '';
+      advFields.advRating.value = res.advRating || '';
+      advFields.advMinSalary.value = res.advMinSalary || '';
+      advFields.advExcludeKeywords.value = res.advExcludeKeywords || '';
+      updateAdvBadge(res);
+
+      if (res.advPanelExpanded) {
+        crawlContainer.classList.add('is-expanded');
+      }
+    });
+  };
+
+  const saveAdvSettings = () => {
+    const settings = {
+      advEasyApply: advFields.advEasyApply.checked,
+      advRemote: advFields.advRemote.checked,
+      advHasSalary: advFields.advHasSalary.checked,
+      advDatePosted: advFields.advDatePosted.value,
+      advRating: advFields.advRating.value,
+      advMinSalary: advFields.advMinSalary.value,
+      advExcludeKeywords: advFields.advExcludeKeywords.value,
+    };
+    chrome.storage.local.set(settings, () => {
+      updateAdvBadge(settings);
+    });
+  };
+
+  Object.values(advFields).forEach((field) => {
+    field.addEventListener('change', saveAdvSettings);
+    if (field.tagName === 'INPUT' && field.type === 'text') {
+      field.addEventListener('input', saveAdvSettings);
+    }
+  });
+
+  // Bấm vào nút gạt trên đỉnh để mở rộng / thu gọn
+  advHandle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isNowExpanded = crawlContainer.classList.toggle('is-expanded');
+    chrome.storage.local.set({ advPanelExpanded: isNowExpanded });
+  });
+
+  advDrawer.querySelector('.drawer-close-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    crawlContainer.classList.remove('is-expanded');
+    chrome.storage.local.set({ advPanelExpanded: false });
+  });
+
+  advDrawer.querySelector('#resetAdvBtn').addEventListener('click', () => {
+    advFields.advEasyApply.checked = false;
+    advFields.advRemote.checked = false;
+    advFields.advHasSalary.checked = false;
+    advFields.advDatePosted.value = '';
+    advFields.advRating.value = '';
+    advFields.advMinSalary.value = '';
+    advFields.advExcludeKeywords.value = '';
+    saveAdvSettings();
+  });
+
+  loadAdvSettings();
 
   updatePageCountDisplay();
 
@@ -261,16 +448,25 @@ function initializeCrawler() {
         jobInput.dispatchEvent(enterUp);
       }
 
-      const targetUrl = `https://www.glassdoor.com/Job/jobs.htm?sc.keyword=${encodeURIComponent(jobVal)}&locKeyword=${encodeURIComponent(locationVal)}`;
-      console.log(`Điều hướng trực tiếp tới: ${targetUrl}`);
-      setTimeout(() => {
-        window.location.href = targetUrl;
-      }, 200);
+      chrome.storage.local.get([
+        'advEasyApply', 'advRemote', 'advHasSalary',
+        'advDatePosted', 'advRating', 'advMinSalary', 'advExcludeKeywords'
+      ], (advRes) => {
+        const targetUrl = CrawlerUtils.buildSearchUrl(jobVal, locationVal, advRes);
+        console.log(`Điều hướng trực tiếp kèm bộ lọc nâng cao: ${targetUrl}`);
+        setTimeout(() => {
+          window.location.href = targetUrl;
+        }, 200);
+      });
       return;
     }
 
     // Bắt đầu quá trình Crawl dữ liệu việc làm
-    chrome.storage.local.get(['crawlMode', 'pageCount', 'jobCount'], async (result) => {
+    chrome.storage.local.get([
+      'crawlMode', 'pageCount', 'jobCount',
+      'advEasyApply', 'advRemote', 'advHasSalary',
+      'advDatePosted', 'advRating', 'advMinSalary', 'advExcludeKeywords'
+    ], async (result) => {
       const mode = result.crawlMode || currentCrawlMode || 'pages';
       let targetPages = 1;
       let targetJobs = null;
@@ -287,7 +483,7 @@ function initializeCrawler() {
       CrawlerUtils.startCrawlingSession();
       crawlButton.disabled = true;
       crawlButton.textContent = 'Đang crawl...';
-      pauseButton.style.display = 'inline-flex';
+      pauseButton.disabled = false;
       pauseButton.classList.remove('is-paused');
       pauseButton.innerHTML = '⏸ Tạm dừng';
 
@@ -304,7 +500,7 @@ function initializeCrawler() {
         );
 
         console.log('Trích xuất dữ liệu việc làm...');
-        const jobs = CrawlerUtils.extractJobs(jobElements, mode === 'jobs' ? targetJobs : null);
+        const jobs = CrawlerUtils.extractJobs(jobElements, mode === 'jobs' ? targetJobs : null, result);
         const validJobCount = CrawlerUtils.downloadCsv(jobs);
 
         console.log(`Đã xuất ${validJobCount} việc làm ra CSV!`);
@@ -320,8 +516,9 @@ function initializeCrawler() {
       } finally {
         CrawlerUtils.stopCrawlingSession();
         crawlButton.disabled = false;
-        pauseButton.style.display = 'none';
+        pauseButton.disabled = true;
         pauseButton.classList.remove('is-paused');
+        pauseButton.innerHTML = '⏸ Tạm dừng';
         if (
           !crawlButton.innerHTML.includes('Crawl tiếp') &&
           !crawlButton.textContent.includes('thất bại')
