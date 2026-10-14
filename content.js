@@ -52,6 +52,59 @@ function updatePageCountDisplay() {
   });
 }
 
+// Dọn dẹp trạng thái ước lượng cũ (nếu có từ phiên bản trước)
+function clearEstimateState() {
+  try {
+    sessionStorage.removeItem('ageEstimateState');
+  } catch (e) {}
+}
+clearEstimateState();
+
+// Áp mọi filter nâng cao (dạng URL param) thẳng lên URL trang hiện tại.
+// Đồng bộ 2 chiều: Nếu bật thì thêm param vào URL; nếu tắt/chuyển về Mọi lúc thì XÓA param khỏi URL.
+function applyAdvFiltersToUrl(urlStr, adv = {}) {
+  const u = new URL(urlStr);
+  let changed = false;
+
+  const syncParam = (key, val) => {
+    const current = u.searchParams.get(key);
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      const sVal = String(val).trim();
+      if (current !== sVal) {
+        u.searchParams.set(key, sVal);
+        changed = true;
+      }
+    } else {
+      // Nếu giá trị rỗng/tắt nhưng trên URL đang có param -> XÓA KHỎI URL
+      if (current !== null) {
+        u.searchParams.delete(key);
+        changed = true;
+      }
+    }
+  };
+
+  syncParam('applicationType', adv.advEasyApply ? '1' : '');
+  syncParam('remoteWorkType', adv.advRemote ? '1' : '');
+  syncParam('fromAge', adv.advDatePosted || '');
+  syncParam('minRating', adv.advRating || '');
+
+  const minSal = parseInt(adv.advMinSalary, 10);
+  syncParam('minSalary', !isNaN(minSal) && minSal > 0 ? String(minSal * 1000) : '');
+
+  return changed ? u.toString() : null;
+}
+
+function advUrlSignature(adv) {
+  const minSal = parseInt(adv.advMinSalary, 10);
+  return JSON.stringify([
+    Boolean(adv.advEasyApply),
+    Boolean(adv.advRemote),
+    adv.advDatePosted || '',
+    adv.advRating || '',
+    isNaN(minSal) ? 0 : minSal,
+  ]);
+}
+
 function initializeCrawler() {
   console.log('Khởi tạo Glassdoor Crawler UI...');
   const crawlContainer = document.createElement('div');
@@ -265,7 +318,8 @@ function initializeCrawler() {
     advExcludeKeywords: advDrawer.querySelector('#advExcludeKeywords'),
   };
 
-  const updateAdvBadge = (settings) => {
+  const updateAdvBadge = (settings = {}) => {
+    const text = (v) => (v === undefined || v === null ? '' : String(v));
     const hasActiveFilters = Boolean(
       settings.advEasyApply ||
       settings.advRemote ||
@@ -273,9 +327,16 @@ function initializeCrawler() {
       settings.advDatePosted ||
       settings.advRating ||
       (settings.advMinSalary && parseInt(settings.advMinSalary, 10) > 0) ||
-      (settings.advExcludeKeywords && settings.advExcludeKeywords.trim())
+      text(settings.advExcludeKeywords).trim()
     );
     advHandle.classList.toggle('has-filters', hasActiveFilters);
+  };
+
+  const setChecked = (el, v) => {
+    if (el) el.checked = Boolean(v);
+  };
+  const setValue = (el, v) => {
+    if (el) el.value = v || '';
   };
 
   const loadAdvSettings = () => {
@@ -284,13 +345,13 @@ function initializeCrawler() {
       'advDatePosted', 'advRating', 'advMinSalary', 'advExcludeKeywords',
       'advPanelExpanded'
     ], (res) => {
-      advFields.advEasyApply.checked = Boolean(res.advEasyApply);
-      advFields.advRemote.checked = Boolean(res.advRemote);
-      advFields.advHasSalary.checked = Boolean(res.advHasSalary);
-      advFields.advDatePosted.value = res.advDatePosted || '';
-      advFields.advRating.value = res.advRating || '';
-      advFields.advMinSalary.value = res.advMinSalary || '';
-      advFields.advExcludeKeywords.value = res.advExcludeKeywords || '';
+      setChecked(advFields.advEasyApply, res.advEasyApply);
+      setChecked(advFields.advRemote, res.advRemote);
+      setChecked(advFields.advHasSalary, res.advHasSalary);
+      setValue(advFields.advDatePosted, res.advDatePosted);
+      setValue(advFields.advRating, res.advRating);
+      setValue(advFields.advMinSalary, res.advMinSalary);
+      setValue(advFields.advExcludeKeywords, res.advExcludeKeywords);
       updateAdvBadge(res);
 
       if (res.advPanelExpanded) {
@@ -301,25 +362,27 @@ function initializeCrawler() {
 
   const saveAdvSettings = () => {
     const settings = {
-      advEasyApply: advFields.advEasyApply.checked,
-      advRemote: advFields.advRemote.checked,
-      advHasSalary: advFields.advHasSalary.checked,
-      advDatePosted: advFields.advDatePosted.value,
-      advRating: advFields.advRating.value,
-      advMinSalary: advFields.advMinSalary.value,
-      advExcludeKeywords: advFields.advExcludeKeywords.value,
+      advEasyApply: Boolean(advFields.advEasyApply && advFields.advEasyApply.checked),
+      advRemote: Boolean(advFields.advRemote && advFields.advRemote.checked),
+      advHasSalary: Boolean(advFields.advHasSalary && advFields.advHasSalary.checked),
+      advDatePosted: (advFields.advDatePosted && advFields.advDatePosted.value) || '',
+      advRating: (advFields.advRating && advFields.advRating.value) || '',
+      advMinSalary: (advFields.advMinSalary && advFields.advMinSalary.value) || '',
+      advExcludeKeywords: (advFields.advExcludeKeywords && advFields.advExcludeKeywords.value) || '',
     };
     chrome.storage.local.set(settings, () => {
       updateAdvBadge(settings);
     });
   };
 
-  Object.values(advFields).forEach((field) => {
-    field.addEventListener('change', saveAdvSettings);
-    if (field.tagName === 'INPUT' && field.type === 'text') {
-      field.addEventListener('input', saveAdvSettings);
-    }
-  });
+  Object.values(advFields)
+    .filter((field) => field && typeof field.addEventListener === 'function')
+    .forEach((field) => {
+      field.addEventListener('change', saveAdvSettings);
+      if (field.tagName === 'INPUT' && field.type === 'text') {
+        field.addEventListener('input', saveAdvSettings);
+      }
+    });
 
   // Bấm vào nút gạt trên đỉnh để mở rộng / thu gọn
   advHandle.addEventListener('click', (e) => {
@@ -328,22 +391,28 @@ function initializeCrawler() {
     chrome.storage.local.set({ advPanelExpanded: isNowExpanded });
   });
 
-  advDrawer.querySelector('.drawer-close-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    crawlContainer.classList.remove('is-expanded');
-    chrome.storage.local.set({ advPanelExpanded: false });
-  });
+  const drawerCloseBtn = advDrawer.querySelector('.drawer-close-btn');
+  if (drawerCloseBtn) {
+    drawerCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      crawlContainer.classList.remove('is-expanded');
+      chrome.storage.local.set({ advPanelExpanded: false });
+    });
+  }
 
-  advDrawer.querySelector('#resetAdvBtn').addEventListener('click', () => {
-    advFields.advEasyApply.checked = false;
-    advFields.advRemote.checked = false;
-    advFields.advHasSalary.checked = false;
-    advFields.advDatePosted.value = '';
-    advFields.advRating.value = '';
-    advFields.advMinSalary.value = '';
-    advFields.advExcludeKeywords.value = '';
-    saveAdvSettings();
-  });
+  const resetAdvBtn = advDrawer.querySelector('#resetAdvBtn');
+  if (resetAdvBtn) {
+    resetAdvBtn.addEventListener('click', () => {
+      setChecked(advFields.advEasyApply, false);
+      setChecked(advFields.advRemote, false);
+      setChecked(advFields.advHasSalary, false);
+      setValue(advFields.advDatePosted, '');
+      setValue(advFields.advRating, '');
+      setValue(advFields.advMinSalary, '');
+      setValue(advFields.advExcludeKeywords, '');
+      saveAdvSettings();
+    });
+  }
 
   loadAdvSettings();
 
@@ -373,6 +442,7 @@ function initializeCrawler() {
   // Sự kiện khi bấm nút Crawl Jobs
   crawlButton.addEventListener('click', async () => {
     console.log('Nút crawl được nhấn, đang kiểm tra dữ liệu tìm kiếm...');
+    clearEstimateState(); // crawl mới thì hủy state ước lượng kẹt (nếu có)
 
     const jobInput =
       document.getElementById('searchBar-jobTitle') ||
@@ -478,6 +548,32 @@ function initializeCrawler() {
         targetJobs = parseInt(result.jobCount, 10) || 30;
         targetPages = Math.ceil(targetJobs / 30);
         console.log(`Crawl chế độ JOBS: ${targetJobs} jobs (~${targetPages} trang)...`);
+      }
+
+      // Tôn trọng toàn bộ filter nâng cao trên trang kết quả: filter nào bật mà
+      // URL chưa thể hiện thì chuyển sang URL có filter rồi auto crawl tiếp
+      // (trang phải ở đúng trạng thái đã lọc rồi mới crawl, không lọc ngầm).
+      const advSig = advUrlSignature(result);
+      const pendingSig = sessionStorage.getItem('appliedAdvSig');
+      const filteredUrl = (() => {
+        try {
+          return applyAdvFiltersToUrl(window.location.href, result);
+        } catch (e) {
+          return null;
+        }
+      })();
+      if (filteredUrl && pendingSig !== advSig) {
+        sessionStorage.setItem('appliedAdvSig', advSig);
+        sessionStorage.setItem('autoStartCrawl', 'true');
+        console.log(`Áp filter nâng cao lên URL: ${filteredUrl}`);
+        setTimeout(() => {
+          window.location.href = filteredUrl;
+        }, 200);
+        return;
+      }
+      sessionStorage.removeItem('appliedAdvSig');
+      if (filteredUrl) {
+        console.log('Glassdoor lờ param filter trên URL, crawl tiếp trên tập hiện tại.');
       }
 
       CrawlerUtils.startCrawlingSession();
